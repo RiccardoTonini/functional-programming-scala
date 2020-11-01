@@ -1,0 +1,7 @@
+- Cat extends Pet
+
+Stream[+A]
+
+- Stream[Cat] extends Stream[Pet]
+
+foldRight[Cat, Stream[Pet]]
