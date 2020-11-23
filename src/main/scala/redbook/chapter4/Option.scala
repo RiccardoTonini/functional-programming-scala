@@ -101,12 +101,12 @@ object Option {
     bs.asInstanceOf[Option[List[B]]]
   }
 
-  def map2[A,B,C](a: Option2[A], b: Option2[B])(f: (A, B) => C): Option2[C] =
+  def map2[A,B,C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] =
     a flatMap (aa => b map (bb => f(aa, bb)))
 
-  def traverseRecursive[A, B](a: List[A])(f: A => Option2[B]): Option2[List[B]] =
+  def traverseRecursive[A, B](a: List[A])(f: A => Option[B]): Option[List[B]] =
     a match {
-      case Nil => Some2(Nil)
+      case Nil => Some(Nil)
       case h::t => map2(f(h), traverseRecursive(t)(f))(_ :: _)
     }
 

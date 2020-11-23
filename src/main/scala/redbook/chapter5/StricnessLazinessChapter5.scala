@@ -61,17 +61,102 @@ sealed trait Stream[+A] {
   }
 
   def map[B](f: A => B): Stream[B] = {
-    // this
     // z default case
     // Last one: folding function
     Stream.foldRight(this)(empty[B])((h, t) => cons(f(h), t))
   }
 
   def flatMap[B](f: A => B): Stream[B] = {
-    Stream.foldRight(this)(empty[B]) {
-      (head, tail) => cons(f(head), tail)
+    // empty[B] z default case
+    // Last one: folding function
+    Stream.foldRight(this)(empty[B]){
+      (head, tail) => f(head).asInstanceOf[Stream[B]] append tail
     }
   }
+
+  def unfoldMap[B](f: A => B): Stream[B] =
+    // f: S => Option[(B, S)]
+    Stream.unfold(this: Stream[A]) {
+      {
+        // Check @ to avoid deconstructing
+        // case cons @ Cons(h,t) => cons
+        case Cons(head, tail) => Some(f(head()), tail())
+        case _ => None
+        // case `empty` => None   // symbol
+      }
+    }
+
+
+  def unfoldTake(n: Int): Stream[A] = {
+    // unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A]
+    Stream.unfold((this, n)) {
+      {
+        case (Cons(hd, tl), n) if n > 1 => Some((hd(), (tl(), n - 1)))
+        case (Cons(hd, tl), n) if (n == 1) => Some((hd(), (empty, 0)))
+        case _ => None
+      }
+    }: Stream[A]
+  }
+
+  def unfoldTakeWhile(f: A => Boolean): Stream[A] =
+    Stream.unfold(this) {
+      case Cons(hd, tl) if f(hd()) => Some((hd(), tl()))
+      case _ => None
+    }
+
+  def zipWith[B, C](streamB: Stream[B])(f: (A, B) => C): Stream[C] =
+    Stream.unfold((this, streamB)) {
+      case (Cons(hdA, tlA), Cons(hdB, tlB)) => Some((f(hdA(), hdB()), (tlA(), tlB())))
+      case _ => None
+    }
+
+  def zipAll[B](other: Stream[B]): Stream[(Option[A],Option[B])] =
+    Stream.unfold((this, other)) {
+      case (Cons(hd1, tl1), Cons(hd2, tl2)) => Some(((Some(hd1()), Some(hd2())), (tl1(), tl2())))
+      case (Cons(hd1, tl1), Empty) => Some(((Some(hd1()), None), (tl1(), empty)))
+      case (Empty, Cons(hd2, tl2)) => Some(((None, Some(hd2())), (empty, tl2())))
+      case _ => None
+    }
+
+  /*
+  Hard: Implement startsWith using functions you’ve written. It should check
+  if one Stream is a prefix of another. For instance,
+  Stream(1,2,3) startsWith Stream(1,2) would be true.
+   */
+  def startsWith[B >: A](other: Stream[B]): Boolean = (this, other) match {
+    case (Cons(hd, tl), Cons(otherHd, otherTl)) if hd() == otherHd() => tl().startsWith(otherTl())
+    case (_, Empty) => true
+    case _ => false
+  }
+
+  def startsWith2[A](other: Stream[A]): Boolean =
+    zipAll(other).takeWhile(element => !element._2.isEmpty) forAll {
+      case (hd, hd2) => hd == hd2
+    }
+
+  def startsWith3[A](other: Stream[A]): Boolean = {
+    zipAll(other).takeWhile {
+      case (a, b) => b != None
+    } forAll {
+      case (a, b) => a == b
+    }
+  }
+
+  // Implement tails using unfold. For a given Stream, tails returns the Stream
+  // of suffixes of the input sequence, starting with the original Stream. For
+  // example, given Stream(1,2,3), it would return
+  // Stream(Stream(1,2,3), Stream(2,3), Stream(3), Stream()).
+  def tails: Stream[Stream[A]] =
+    Stream.unfold(this) {
+      case Empty => None
+      case s => Some((s, s.drop(1)))
+    } append Stream(empty)
+
+  def tails2: Stream[Stream[A]] =
+    Stream.unfold(this) {
+      case Empty => None
+      case stream @ Cons(_, tl) => Some((stream, tl()))
+    } append Stream(empty)
 
 }
 
@@ -121,4 +206,44 @@ object Stream {
     loop(0, 1)
   }
 
+  /*
+  More general stream-building function called unfold.
+  It takes an initial state and a function to produce both the
+  next state and the next value in the generated stream.
+   */
+  def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
+    val next_state_value_pair = f(z)
+    next_state_value_pair match {
+      case None => empty
+      case Some((current_val, next_state)) => cons(current_val, unfold(next_state)(f))
+    }
+
+  }
+
+  def unfoldOnes: Stream[Int] = {
+    // Next val and state
+    def nextValState(z: Int) = {
+      Some((1, 1))
+    }
+    unfold(1)(nextValState)
+  }
+
+  def unfoldFrom(n: Int): Stream[Int] = {
+    // Next val and state
+    def nextValState(n: Int) = {
+      Some((n, n + 1))
+    }
+    unfold(n)(nextValState)
+  }
+
+  def unfoldConstant[A](a: A): Stream[A] = {
+    // Stream.cons(a: A, constant(a))
+    /*
+    def nextValState(aValue: A) = {
+      Some((aValue, aValue))
+    }
+
+    */
+    unfold(a)(aValue => Some((aValue, aValue)))
+  }
 }
