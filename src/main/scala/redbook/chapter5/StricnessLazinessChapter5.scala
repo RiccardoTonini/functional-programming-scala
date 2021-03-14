@@ -1,7 +1,9 @@
 package redbook.chapter5
 
+import redbook.chapter2.FunTools.{compose, curry, partial1, uncurry}
+
 import scala.List
-import redbook.chapter5.Stream.{cons, empty}
+import redbook.chapter5.Stream.{cons, empty, foldRight}
 
 sealed trait Stream[+A] {
 
@@ -86,7 +88,6 @@ sealed trait Stream[+A] {
       }
     }
 
-
   def unfoldTake(n: Int): Stream[A] = {
     // unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A]
     Stream.unfold((this, n)) {
@@ -119,7 +120,7 @@ sealed trait Stream[+A] {
     }
 
   /*
-  Hard: Implement startsWith using functions you’ve written. It should check
+  5.14 Hard: Implement startsWith using functions you’ve written. It should check
   if one Stream is a prefix of another. For instance,
   Stream(1,2,3) startsWith Stream(1,2) would be true.
    */
@@ -136,13 +137,13 @@ sealed trait Stream[+A] {
 
   def startsWith3[A](other: Stream[A]): Boolean = {
     zipAll(other).takeWhile {
-      case (a, b) => b != None
+      case (_, b) => b != None
     } forAll {
-      case (a, b) => a == b
+      case (hd, hd2) => hd == hd2
     }
   }
 
-  // Implement tails using unfold. For a given Stream, tails returns the Stream
+  // 15.5 Implement tails using unfold. For a given Stream, tails returns the Stream
   // of suffixes of the input sequence, starting with the original Stream. For
   // example, given Stream(1,2,3), it would return
   // Stream(Stream(1,2,3), Stream(2,3), Stream(3), Stream()).
@@ -157,6 +158,50 @@ sealed trait Stream[+A] {
       case Empty => None
       case stream @ Cons(_, tl) => Some((stream, tl()))
     } append Stream(empty)
+
+  def hasSubsequence[A](s: Stream[A]): Boolean =
+    tails exists (_ startsWith s)
+
+  // 5.6 Generalize tails to the function scanRight,
+  // which is like a foldRight that returns a stream of
+  // the intermediate results.
+  // - foldRight
+  // - recur how to reuse stream of intermediate results
+  // - How to cache previously computed intermediate results?
+  // Stream(1, 2 , 3).scanRight(0)(_ + _).toList
+  // res: List[Int] = List(6, 5, 3, 0)
+  // List(1 + 2 + 3 + 0, 2 + 3 + 0, 3 + 0, 0)
+  def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] = {
+    val (_, accumulator) = foldRight((z, Stream(z)))((a, p0) => {
+      lazy val p1 = p0
+      val b2 = f(a, p1._1)
+      (b2, cons(b2, p1._2))
+    })
+    accumulator
+  }
+
+  /**
+   * Attempt recursive implementation of scanRight
+  def scanRight2[B](init: B)(f: (A, => B) => B): Stream[B] = {
+    this match {
+      case Empty => Stream(init)
+      case Cons(head, tail) =>
+        val intermediate: Stream[B] = tail().scanRight(init)(f)
+    }
+  }
+  **/
+
+  def foldRight[B](z: => B)(f: (A, => B) => B): B =
+    // The arrow `=>` in front of the argument type `B` indicates
+    // that the function `f` takes its second argument by name
+    // and may choose not to evaluate it.
+    // If `f` doesn't evaluate its second argument,
+    // the recursion never occurs.
+    this match {
+      case Cons(head, tail) => f(head(), tail().foldRight(z)(f))
+      case _ => z
+    }
+
 
 }
 
@@ -212,6 +257,7 @@ object Stream {
   next state and the next value in the generated stream.
    */
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = {
+    /* z Initial value */
     val next_state_value_pair = f(z)
     next_state_value_pair match {
       case None => empty
@@ -246,4 +292,14 @@ object Stream {
     */
     unfold(a)(aValue => Some((aValue, aValue)))
   }
+}
+
+object PlayGround {
+  def main(args: Array[String]): Unit = {
+    println("********   Testing Scan Right   ********")
+    val res = Stream(1, 2, 3).scanRight(0)(_ + _).toList
+    print(s"Result ${res}")
+
+  }
+
 }
