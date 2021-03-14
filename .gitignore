@@ -19,6 +19,10 @@ project/plugins/project/
 *.iws
 .idea
 
+# VS Code
+.vscode/*
+.metals/*
+
 # mac
 .DS_Store
 
