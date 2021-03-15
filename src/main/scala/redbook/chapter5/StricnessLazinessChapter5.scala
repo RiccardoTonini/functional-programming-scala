@@ -202,7 +202,6 @@ sealed trait Stream[+A] {
       case _ => z
     }
 
-
 }
 
 case object Empty extends Stream[Nothing]
