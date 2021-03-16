@@ -36,9 +36,9 @@ object RandomGenerator {
     rng => (a, rng)
   }
 
-  def map[A, B](transitionState: Rand[A])(f: A => B): Rand[B] = {
+  def map[A, B](transition: Rand[A])(f: A => B): Rand[B] = {
     rng => {
-      val (a, nextRNG) = transitionState(rng)
+      val (a, nextRNG) = transition(rng)
       (f(a), nextRNG)
     }
   }
@@ -74,6 +74,8 @@ object RandomGenerator {
    * @return
    */
   def both[A, B](ra: Rand[A], rb: Rand[B]): Rand[(A, B)] = {
+    // Underscore: match positional arg in anonymous function
+    // This makes the code concise; though less explicit
     map2(ra, rb){(_, _)}
   }
 
@@ -106,6 +108,9 @@ object RandomGenerator {
       unit(emptyTransitions)
     ){
       (transition, transitionsSoFar) => map2(transition, transitionsSoFar)(_ :: _)
+      //(transition, transitionsSoFar) => map2(transition, transitionsSoFar){
+      //  (transition, transitionsSoFar) => transition :: transitionsSoFar
+      //}
     }
 
   }
@@ -118,10 +123,42 @@ object RandomGenerator {
    * @return
    */
   def intsSequence(count: Int)(rng: SimpleRNG): Rand[List[Int]] = {
-    val transitions: List[Rand[Int]] = List.fill(count)(rng => rng.nextInt)
+    // Question why with type hint SimpleRNG does not work? -> curly braces {}
+    val transitions: List[Rand[Int]] = List.fill(count){rng:RNG => rng.nextInt}
     sequence(transitions)
   }
 
+  def nonNegativeLessThan1(n: Int): Rand[Int] = {
+    map(nonNegativeInt){ _ % n }
+  }
+
+  /**
+   * Recursive implementation of nonNegativeLessThan
+   * @param n
+   * @return
+   */
+  def nonNegativeLessThan2(n: Int): Rand[Int] = {rng =>
+    val (i, nextRNG) = nonNegativeInt(rng)
+    val mod = i % n
+    if (i + (n - 1 ) - mod >= 0)
+      (mod, nextRNG)
+    else nonNegativeLessThan2(n)(rng)
+  }
+
+  /**
+   * Clarify syntax for code block
+   * @param transition
+   * @param g
+   * @tparam A
+   * @tparam B
+   * @return
+   */
+  def flatMap[A, B](transition: Rand[A])(g: A => Rand[B]): Rand[B] = {
+    rng => {
+      val (a, nextRNG) = transition(rng)  // Flatten
+      g(a)(nextRNG)  // Map to Rand[B] which is function that takes a RNG and returns a (A, RNG)
+    }
+  }
 
   case class SimpleRNG(seed: Long) extends RNG {
 

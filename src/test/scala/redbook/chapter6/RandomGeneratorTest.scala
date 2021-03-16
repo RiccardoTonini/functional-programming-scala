@@ -1,6 +1,7 @@
 package redbook.chapter6
 
 import munit.FunSuite
+import redbook.chapter6.RandomGenerator.SimpleRNG
 
 class RandomGeneratorTest extends FunSuite {
   test("nonNegativeInt with seed 0") {
