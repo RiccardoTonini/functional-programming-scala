@@ -1,5 +1,7 @@
 package redbook.chapter6
 
+import redbook.chapter6.RandomGenerator.{Rand, State}
+
 trait RNG {
   def nextInt: (Int, RNG)
 }
@@ -14,7 +16,8 @@ object RandomGenerator {
    * can be used by the next action.
    * @tparam A
    */
-  type Rand[+A] = RNG => (A, RNG)
+  type State[S, +A] = S => (A, S)
+  type Rand[+A] = State[RNG, A]
 
   /**
    * We can now turn methods such as RNG's nextInt()
@@ -63,6 +66,29 @@ object RandomGenerator {
   }
 
   /**
+   * Clarify syntax for code block
+   * @param transition
+   * @param g
+   * @tparam A
+   * @tparam B
+   * @return
+   */
+  def flatMap[A, B](transition: Rand[A])(g: A => Rand[B]): Rand[B] = {
+    rng => {
+      val (a, nextRNG) = transition(rng)  // Flatten
+      g(a)(nextRNG)  // Map to Rand[B] which is function that takes a RNG and returns a (A, RNG)
+    }
+  }
+
+  def mapViaFlatmap[A, B](transition: Rand[A])(f: A => B): Rand[B] = {
+    flatMap(transition){a => unit(f(a))}
+  }
+
+  def map2ViaFlatmap[A, B, C](transitionA: Rand[A], transitionB: Rand[B])(f: (A, B) => C): Rand[C] = {
+      flatMap(transitionA){a => map(transitionB)(b => f(a, b))}
+  }
+
+  /**
    * We can use map2 to combine arbitrary RNG state transitions.
    * For example, if we have a transition that generates values of
    * type A, and another values of type B, we can then combine them
@@ -97,22 +123,26 @@ object RandomGenerator {
    * map2(transition, transitionsSoFar)(_ :: _) results in a value of type Rand[List[A]]
    * We map over that to prepend (cons) the element onto the accumulated
    * list.
-   *
-   * @param transitions
-   * @tparam A
-   * @return
    */
+//  def sequence[A](transitions: List[Rand[A]]): Rand[List[A]] = {
+//    val emptyTransitions = List()
+//    transitions.foldRight(
+//      unit(emptyTransitions)
+//    ){
+//      // (transition, transitionsSoFar) => map2(transition, transitionsSoFar)(_ :: _)
+//      (transition, transitionsSoFar) => map2(transition, transitionsSoFar){
+//        (transition, transitionsSoFar) => transition :: transitionsSoFar
+//      }
+//    }
+//
+//  }
   def sequence[A](transitions: List[Rand[A]]): Rand[List[A]] = {
-    val emptyTransitions = List()
+    val emptyTransitions = List[A]()
     transitions.foldRight(
       unit(emptyTransitions)
-    ){
+    )(
       (transition, transitionsSoFar) => map2(transition, transitionsSoFar)(_ :: _)
-      //(transition, transitionsSoFar) => map2(transition, transitionsSoFar){
-      //  (transition, transitionsSoFar) => transition :: transitionsSoFar
-      //}
-    }
-
+    )
   }
 
   /**
@@ -145,18 +175,10 @@ object RandomGenerator {
     else nonNegativeLessThan2(n)(rng)
   }
 
-  /**
-   * Clarify syntax for code block
-   * @param transition
-   * @param g
-   * @tparam A
-   * @tparam B
-   * @return
-   */
-  def flatMap[A, B](transition: Rand[A])(g: A => Rand[B]): Rand[B] = {
-    rng => {
-      val (a, nextRNG) = transition(rng)  // Flatten
-      g(a)(nextRNG)  // Map to Rand[B] which is function that takes a RNG and returns a (A, RNG)
+  def nonNegativeLessThan(n: Int): Rand[Int] = {
+    flatMap(nonNegativeInt) { i =>
+      val mod = i % n
+      if (i + (n-1) - mod >= 0) unit(mod) else nonNegativeLessThan(n)
     }
   }
 
@@ -253,4 +275,13 @@ object RandomGenerator {
     }
     go(count, emptyAccumulator, rng)
   }
+
+}
+
+
+case class State[S, +A](run: S => (A, S)) {
+  def unit[A](a: A) = ???
+  def map[B](f: A => B): State[S, B] = ???
+  def map2[B, C](sb: State[S, B])(f: (A, B) => C): State[S, C] = ???
+  def flatMap[B](f: A => State[S, B]): State[S, B] = ???
 }
